@@ -33,6 +33,10 @@ interface NurseryStore {
   getInventoryBySpecies: (speciesId: string) => Inventory[];
   getOrdersByCustomer: (customerId: string) => Order[];
   getTraceByNo: (no: string) => TraceRecord | undefined;
+  addSchedule: (item: Omit<ScheduleItem, 'id'>) => void;
+  updateSchedule: (id: string, updates: Partial<ScheduleItem>) => void;
+  deleteSchedule: (id: string) => void;
+  toggleScheduleStatus: (id: string) => void;
 }
 
 export const useStore = create<NurseryStore>((set, get) => ({
@@ -58,4 +62,21 @@ export const useStore = create<NurseryStore>((set, get) => ({
   getInventoryBySpecies: (speciesId) => get().inventories.filter(i => i.speciesId === speciesId),
   getOrdersByCustomer: (customerId) => get().orders.filter(o => o.customerId === customerId),
   getTraceByNo: (no) => get().traceRecords.find(t => t.traceNo.toLowerCase().includes(no.toLowerCase()) || t.traceNo === no),
+  addSchedule: (item) => {
+    const newId = 'sc' + (Date.now()).toString(36);
+    set({ schedules: [...get().schedules, { ...item, id: newId }] });
+  },
+  updateSchedule: (id, updates) => {
+    set({ schedules: get().schedules.map(s => s.id === id ? { ...s, ...updates } : s) });
+  },
+  deleteSchedule: (id) => {
+    set({ schedules: get().schedules.filter(s => s.id !== id) });
+  },
+  toggleScheduleStatus: (id) => {
+    set({
+      schedules: get().schedules.map(s =>
+        s.id === id ? { ...s, status: s.status === '待办' ? '已完成' : '待办' } : s
+      )
+    });
+  },
 }));
