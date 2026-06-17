@@ -1,7 +1,18 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Bell, Calendar, Leaf, TrendingUp } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 import { useStore } from '@/store';
 import { formatCurrency } from '@/utils/formatters';
+
+const pathToPageKey: Record<string, string> = {
+  '/ledger': 'ledger',
+  '/seedling': 'seedling',
+  '/grafting': 'grafting',
+  '/pest': 'pest',
+  '/sales': 'sales',
+  '/customer': 'customer',
+  '/trace': 'trace',
+};
 
 const pageTitles: Record<string, { title: string; subtitle: string }> = {
   ledger: { title: '苗木台账', subtitle: '品种档案 · 规格分级 · 库存统计' },
@@ -14,8 +25,18 @@ const pageTitles: Record<string, { title: string; subtitle: string }> = {
 };
 
 const Header: React.FC = () => {
-  const { currentPage, orders, customers, inventories, schedules } = useStore();
-  const pageInfo = pageTitles[currentPage] || pageTitles.ledger;
+  const location = useLocation();
+  const { currentPage, setCurrentPage, orders, customers, inventories, schedules } = useStore();
+
+  useEffect(() => {
+    const keyFromPath = pathToPageKey[location.pathname];
+    if (keyFromPath && keyFromPath !== currentPage) {
+      setCurrentPage(keyFromPath);
+    }
+  }, [location.pathname, currentPage, setCurrentPage]);
+
+  const activeKey = pathToPageKey[location.pathname] || currentPage || 'ledger';
+  const pageInfo = pageTitles[activeKey] || pageTitles.ledger;
   const today = new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' });
 
   const totalInventory = inventories.reduce((sum, i) => sum + i.quantity, 0);

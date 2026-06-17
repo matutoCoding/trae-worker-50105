@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Search, QrCode, MapPin, Calendar, Users, Sprout, Truck, ShieldCheck, Leaf, Scissors, TreeDeciduous, ArrowRight, FileCheck, Package, AlertCircle, CheckCircle2,
-  History, Map as MapIcon, Building2, ChevronRight
+  History, Map as MapIcon, Building2, ChevronRight, Clock, X
 } from 'lucide-react';
 import { useStore } from '@/store';
 import StatCard from '@/components/ui/StatCard';
@@ -9,28 +9,114 @@ import Card from '@/components/ui/Card';
 import Badge from '@/components/ui/Badge';
 import { formatDate, getRarityColor } from '@/utils/formatters';
 
+interface RecentQuery {
+  id: string;
+  traceId: string;
+  traceNo: string;
+  speciesName: string;
+  time: Date;
+  keyword: string;
+}
+
 const Trace: React.FC = () => {
   const { traceRecords, species, customers } = useStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTrace, setSelectedTrace] = useState<string | null>('tr1');
   const [hasSearched, setHasSearched] = useState(false);
+  const [recentQueries, setRecentQueries] = useState<RecentQuery[]>([]);
+  const [searchMode, setSearchMode] = useState<'all' | 'no' | 'species' | 'batch'>('all');
 
-  const handleSearch = () => {
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('trace_recent_queries');
+      if (saved) setRecentQueries(JSON.parse(saved));
+    } catch {}
+  }, []);
+
+  const persistRecent = (list: RecentQuery[]) => {
+    try {
+      localStorage.setItem('trace_recent_queries', JSON.stringify(list.slice(0, 8)));
+    } catch {}
+  };
+
+  const addToRecent = (traceId: string, keyword: string) => {
+    const rec = traceRecords.find(t => t.id === traceId);
+    if (!rec) return;
+    const item: RecentQuery = {
+      id: `${traceId}-${Date.now()}`,
+      traceId,
+      traceNo: rec.traceNo,
+      speciesName: rec.speciesName,
+      time: new Date(),
+      keyword: keyword || rec.traceNo,
+    };
+    setRecentQueries(prev => {
+      const filtered = prev.filter(p => p.traceId !== traceId);
+      const next = [item, ...filtered].slice(0, 8);
+      persistRecent(next);
+      return next;
+    });
+  };
+
+  const clearRecent = () => {
+    setRecentQueries([]);
+    persistRecent([]);
+  };
+
+  const removeRecent = (id: string) => {
+    setRecentQueries(prev => {
+      const next = prev.filter(p => p.id !== id);
+      persistRecent(next);
+      return next;
+    });
+  };
+
+  const doSearch = (term: string, mode: typeof searchMode = searchMode) => {
     setHasSearched(true);
-    if (!searchTerm.trim()) {
+    const keyword = term.trim();
+    if (!keyword) {
       setSelectedTrace(null);
       return;
     }
-    const found = traceRecords.find(t =>
-      t.traceNo.toLowerCase().includes(searchTerm.trim().toLowerCase()) ||
-      t.speciesName.includes(searchTerm.trim()) ||
-      t.batchNo.includes(searchTerm.trim())
-    );
-    setSelectedTrace(found?.id || null);
+    const kw = keyword.toLowerCase();
+    const found = traceRecords.find(t => {
+      const matchNo = mode === 'all' || mode === 'no' ? t.traceNo.toLowerCase().includes(kw) : false;
+      const matchSpecies = mode === 'all' || mode === 'species' ? t.speciesName.includes(keyword) : false;
+      const matchBatch = mode === 'all' || mode === 'batch' ? t.batchNo.toLowerCase().includes(kw) : false;
+      return matchNo || matchSpecies || matchBatch;
+    });
+    if (found) {
+      setSelectedTrace(found.id);
+      addToRecent(found.id, keyword);
+    } else {
+      setSelectedTrace(null);
+    }
+  };
+
+  const handleSearch = () => doSearch(searchTerm);
+
+  const quickPick = (keyword: string, mode: 'no' | 'species' | 'batch') => {
+    setSearchTerm(keyword);
+    setSearchMode(mode);
+    doSearch(keyword, mode);
+  };
+
+  const openFromRecent = (r: RecentQuery) => {
+    setSearchTerm(r.keyword);
+    setSelectedTrace(r.traceId);
+    setHasSearched(true);
+    setRecentQueries(prev => {
+      const filtered = prev.filter(p => p.id !== r.id);
+      const next = [{ ...r, time: new Date(), id: `${r.traceId}-${Date.now()}` }, ...filtered].slice(0, 8);
+      persistRecent(next);
+      return next;
+    });
   };
 
   const trace = traceRecords.find(t => t.id === selectedTrace);
   const sp = species.find(s => s.id === trace?.speciesId);
+
+  const allSpeciesNames = useMemo(() => species.slice(0, 6).map(s => s.name), [species]);
 
   const stageIcons: Record<string, React.ElementType> = {
     '播种': Sprout,
@@ -60,6 +146,16 @@ const Trace: React.FC = () => {
     '成活检查': 'from-leaf-400 to-forest-500',
   };
 
+  const timeAgo = (d: Date) => {
+    const diff = Date.now() - new Date(d).getTime();
+    const min = Math.floor(diff / 60000);
+    if (min < 1) return '刚刚';
+    if (min < 60) return `${min}分钟前`;
+    const hr = Math.floor(min / 60);
+    if (hr < 24) return `${hr}小时前`;
+    return `${Math.floor(hr / 24)}天前`;
+  };
+
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -78,52 +174,130 @@ const Trace: React.FC = () => {
           <div className="text-center mb-5">
             <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-white/10 backdrop-blur border border-white/20 mb-3">
               <QrCode className="w-4 h-4" />
-              <span className="text-sm">苗木全生命周期溯源查询系统</span>
+              <span className="text-sm">苗木全生命周期溯源查询工作台</span>
             </div>
-            <h2 className="font-serif text-3xl font-bold mb-2">输入溯源编号 · 查看完整生长档案</h2>
-            <p className="text-forest-100/80 text-sm">每一株苗木都有唯一的身份标识，从播种到定植全程可追溯</p>
+            <h2 className="font-serif text-3xl font-bold mb-2">多维度查询 · 一键追踪苗木档案</h2>
+            <p className="text-forest-100/80 text-sm">支持溯源编号、品种名称、批次号任意查询</p>
           </div>
-          <div className="max-w-2xl mx-auto flex gap-3">
-            <div className="flex-1 relative">
-              <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                placeholder="输入溯源编号如：TRYX2021S001286，或搜索苗木品种、批次号..."
-                className="w-full pl-14 pr-5 py-4 rounded-2xl bg-white text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-leaf-400/50 text-base shadow-xl"
-              />
+          <div className="max-w-3xl mx-auto">
+            <div className="flex gap-1 p-1 rounded-2xl bg-white/10 backdrop-blur border border-white/20 mb-3 w-fit mx-auto">
+              {[
+                { k: 'all', label: '全部' },
+                { k: 'no', label: '溯源编号' },
+                { k: 'species', label: '苗木品种' },
+                { k: 'batch', label: '批次号' },
+              ].map(m => (
+                <button
+                  key={m.k}
+                  onClick={() => setSearchMode(m.k as any)}
+                  className={`px-4 py-1.5 rounded-xl text-sm transition-all ${searchMode === m.k ? 'bg-white text-forest-800 font-bold shadow-md' : 'text-forest-100/80 hover:text-white hover:bg-white/10'}`}
+                >
+                  {m.label}
+                </button>
+              ))}
             </div>
-            <button
-              onClick={handleSearch}
-              className="px-8 py-4 rounded-2xl bg-gradient-to-r from-leaf-400 to-leaf-500 text-forest-900 font-bold hover:shadow-xl hover:scale-[1.02] active:scale-100 transition-all duration-200 shadow-lg flex items-center gap-2 whitespace-nowrap"
-            >
-              <Search className="w-5 h-5" />
-              查询溯源
-            </button>
-          </div>
-          <div className="flex items-center justify-center gap-4 mt-4 text-xs text-forest-100/70">
-            <span>快速查询示例：</span>
-            {['TRYX2021S001286', '银杏', 'TRSS2022S003521', '红枫'].map(ex => (
-              <button key={ex} onClick={() => { setSearchTerm(ex); setSelectedTrace(null); setTimeout(() => handleSearch(), 50); }} className="px-3 py-1 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 transition-colors">
-                {ex}
+            <div className="flex gap-3">
+              <div className="flex-1 relative">
+                <Search className="absolute left-5 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                  placeholder={
+                    searchMode === 'no' ? '请输入溯源编号，如 TRYX2021S001286...'
+                    : searchMode === 'species' ? '请输入苗木品种名称，如 银杏、水杉...'
+                    : searchMode === 'batch' ? '请输入批次号，如 YX-2021-03-A...'
+                    : '输入溯源编号 / 品种 / 批次号...'
+                  }
+                  className="w-full pl-14 pr-5 py-4 rounded-2xl bg-white text-gray-800 placeholder-gray-400 focus:outline-none focus:ring-4 focus:ring-leaf-400/50 text-base shadow-xl"
+                />
+                {searchTerm && (
+                  <button onClick={() => { setSearchTerm(''); setSelectedTrace(null); setHasSearched(false); }} className="absolute right-4 top-1/2 -translate-y-1/2 w-6 h-6 rounded-full bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={handleSearch}
+                className="px-8 py-4 rounded-2xl bg-gradient-to-r from-leaf-400 to-leaf-500 text-forest-900 font-bold hover:shadow-xl hover:scale-[1.02] active:scale-100 transition-all duration-200 shadow-lg flex items-center gap-2 whitespace-nowrap"
+              >
+                <Search className="w-5 h-5" />
+                查询溯源
               </button>
-            ))}
+            </div>
+            <div className="flex flex-wrap items-center justify-center gap-2 mt-4 text-xs">
+              <span className="text-forest-100/70">快速查询：</span>
+              <button onClick={() => quickPick('TRYX2021S001286', 'no')} className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 transition-colors flex items-center gap-1">
+                <QrCode className="w-3 h-3" />TRYX2021S001286
+              </button>
+              {allSpeciesNames.slice(0, 4).map(n => (
+                <button key={n} onClick={() => quickPick(n, 'species')} className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 transition-colors flex items-center gap-1">
+                  <TreeDeciduous className="w-3 h-3" />{n}
+                </button>
+              ))}
+              <button onClick={() => quickPick('YX-2021-03-A', 'batch')} className="px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 transition-colors flex items-center gap-1">
+                <Leaf className="w-3 h-3" />YX-2021-03-A
+              </button>
+            </div>
           </div>
         </div>
       </Card>
+
+      {recentQueries.length > 0 && (
+        <Card
+          title="最近查询记录"
+          subtitle="快速回访已查询的苗木去向"
+          icon={<Clock className="w-5 h-5" />}
+          extra={
+            <button onClick={clearRecent} className="text-xs text-gray-400 hover:text-red-500 transition-colors flex items-center gap-1">
+              <X className="w-3 h-3" />清空记录
+            </button>
+          }
+        >
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            {recentQueries.map(r => (
+              <div key={r.id} className="relative group">
+                <button
+                  onClick={() => openFromRecent(r)}
+                  className="w-full p-4 rounded-2xl bg-gradient-to-br from-forest-50 to-sand-50 border border-forest-100 hover:shadow-hover hover:-translate-y-0.5 hover:border-forest-300 transition-all text-left"
+                >
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-forest-500 to-leaf-500 flex items-center justify-center flex-shrink-0">
+                      <TreeDeciduous className="w-4 h-4 text-white" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-sm text-gray-800 truncate">{r.speciesName}</div>
+                      <div className="text-[10px] text-forest-600 font-mono truncate">{r.traceNo}</div>
+                    </div>
+                  </div>
+                  <div className="text-[10px] text-gray-400 flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {timeAgo(r.time)} · {r.keyword.length > 10 ? r.keyword.slice(0, 10) + '...' : r.keyword}
+                  </div>
+                </button>
+                <button
+                  onClick={(e) => { e.stopPropagation(); removeRecent(r.id); }}
+                  className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-gray-200 hover:bg-red-500 hover:text-white text-gray-500 opacity-0 group-hover:opacity-100 transition-all flex items-center justify-center shadow-md"
+                >
+                  <X className="w-3 h-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {hasSearched && !trace && (
         <Card className="text-center py-16">
           <AlertCircle className="w-16 h-16 text-amber-400 mx-auto mb-4" />
           <h3 className="font-serif text-2xl font-bold text-gray-800 mb-2">未找到溯源记录</h3>
-          <p className="text-gray-500 mb-6">请检查溯源编号是否正确，或尝试其他编号进行查询</p>
+          <p className="text-gray-500 mb-6">请检查关键词是否正确，或尝试其他方式进行查询</p>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 max-w-3xl mx-auto">
             {traceRecords.slice(0, 3).map(t => (
               <button
                 key={t.id}
-                onClick={() => { setSelectedTrace(t.id); setSearchTerm(t.traceNo); }}
+                onClick={() => quickPick(t.traceNo, 'no')}
                 className="p-4 rounded-xl bg-gradient-to-br from-forest-50 to-sand-50 border border-forest-100 hover:shadow-hover hover:-translate-y-0.5 transition-all text-left"
               >
                 <div className="text-xs text-forest-600 font-mono mb-1">{t.traceNo}</div>
@@ -178,6 +352,12 @@ const Trace: React.FC = () => {
                           </div>
                         </div>
                         <p className="text-sm text-gray-700 leading-relaxed mb-2">{node.description}</p>
+                        {node.result && (
+                          <div className="text-xs mb-2 flex items-center gap-1.5">
+                            <CheckCircle2 className="w-3.5 h-3.5 text-forest-500" />
+                            <span className="text-forest-700 font-medium">结果：{node.result}</span>
+                          </div>
+                        )}
                         <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500 pt-2 border-t border-sand-100">
                           {node.operator && <span className="flex items-center gap-1"><Users className="w-3.5 h-3.5 text-forest-500" />{node.operator}</span>}
                           {node.location && <span className="flex items-center gap-1"><MapPin className="w-3.5 h-3.5 text-earth-500" />{node.location}</span>}
@@ -277,14 +457,14 @@ const Trace: React.FC = () => {
       )}
 
       {!hasSearched && (
-        <Card title="最近可溯源记录" subtitle="近期出圃的可溯源苗木列表" icon={<History className="w-5 h-5" />}>
+        <Card title="最近可溯源记录" subtitle="近期出圃的可溯源苗木列表 · 点击快速查询" icon={<History className="w-5 h-5" />}>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {traceRecords.map((t, idx) => {
               const s = species.find(sp => sp.id === t.speciesId);
               return (
                 <button
                   key={t.id}
-                  onClick={() => { setSelectedTrace(t.id); setSearchTerm(t.traceNo); setHasSearched(true); }}
+                  onClick={() => quickPick(t.traceNo, 'no')}
                   className="p-5 rounded-2xl bg-gradient-to-br from-white to-sand-50 border border-sand-100 hover:shadow-hover hover:-translate-y-1 transition-all text-left group animate-fade-in-up"
                   style={{ animationDelay: `${idx * 80}ms` }}
                 >
@@ -299,7 +479,7 @@ const Trace: React.FC = () => {
                   </div>
                   <div className="space-y-1.5 mb-4 text-xs text-gray-500">
                     <div className="flex items-center gap-2"><Leaf className="w-3.5 h-3.5 text-leaf-500" />{t.grade} · {t.spec}</div>
-                    <div className="flex items-center gap-2"><Building2 className="w-3.5 h-3.5 text-sky-500" />{t.destination.slice(0, 12)}...</div>
+                    <div className="flex items-center gap-2"><Building2 className="w-3.5 h-3.5 text-sky-500" />{t.destination.slice(0, 14)}...</div>
                   </div>
                   <div className="flex items-center justify-between pt-3 border-t border-sand-100">
                     <Badge variant="info" className="border">{t.lifecycle.length}个节点</Badge>

@@ -1,6 +1,7 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import {
-  Truck, FileCheck, Building2, Receipt, Calendar, Users, MapPin, DollarSign, CreditCard, FileText, CheckCircle2, AlertCircle
+  Truck, FileCheck, Building2, Receipt, Calendar, Users, MapPin, DollarSign, CreditCard, FileText, CheckCircle2, AlertCircle,
+  Search, Filter, X, ChevronDown
 } from 'lucide-react';
 import {
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
@@ -15,6 +16,20 @@ import { formatCurrency, formatDate, getStatusColor } from '@/utils/formatters';
 const Sales: React.FC = () => {
   const { orders, outbounds, projectDeliveries, customers } = useStore();
   const [activeTab, setActiveTab] = useState('ledger');
+  const [filterCustomer, setFilterCustomer] = useState<string>('all');
+  const [filterProject, setFilterProject] = useState<string>('');
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const customerDropdownRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (customerDropdownRef.current && !customerDropdownRef.current.contains(e.target as Node)) {
+        setShowCustomerDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   const totalAmount = orders.reduce((s, o) => s + o.amount, 0);
   const totalPaid = orders.reduce((s, o) => s + o.paidAmount, 0);
@@ -39,6 +54,23 @@ const Sales: React.FC = () => {
     '已完成': 'bg-forest-100 text-forest-700 border-forest-200',
     '已取消': 'bg-red-100 text-red-700 border-red-200',
   };
+
+  const filteredOrders = useMemo(() => {
+    return orders.filter(o => {
+      if (filterCustomer !== 'all' && o.customerId !== filterCustomer) return false;
+      if (filterProject && o.projectName && !o.projectName.includes(filterProject.trim())) return false;
+      if (filterProject && !o.projectName) return false;
+      return true;
+    });
+  }, [orders, filterCustomer, filterProject]);
+
+  const filterStats = useMemo(() => {
+    const filteredAmount = filteredOrders.reduce((s, o) => s + o.amount, 0);
+    const filteredPaid = filteredOrders.reduce((s, o) => s + o.paidAmount, 0);
+    return { count: filteredOrders.length, amount: filteredAmount, paid: filteredPaid };
+  }, [filteredOrders]);
+
+  const hasActiveFilter = filterCustomer !== 'all' || filterProject !== '';
 
   return (
     <div className="space-y-6">
@@ -87,7 +119,84 @@ const Sales: React.FC = () => {
             </div>
           </Card>
 
-          <Card title="订单明细台账" subtitle="所有订单的详细记录与状态追踪" icon={<FileText className="w-5 h-5" />}>
+          <Card
+            title="订单明细台账"
+            subtitle={hasActiveFilter ? `筛选结果：${filterStats.count}笔订单 · 金额${formatCurrency(filterStats.amount)} · 已回款${formatCurrency(filterStats.paid)}` : "所有订单的详细记录与状态追踪"}
+            icon={<FileText className="w-5 h-5" />}
+            extra={hasActiveFilter ? (
+              <button onClick={() => { setFilterCustomer('all'); setFilterProject(''); }} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 border border-red-100 text-xs font-medium transition-colors">
+                <X className="w-3.5 h-3.5" />清除筛选
+              </button>
+            ) : undefined}
+          >
+            <div className="mb-5 p-4 rounded-xl bg-gradient-to-br from-sand-50/80 to-forest-50/30 border border-sand-100">
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center shadow-sm border border-sand-100">
+                    <Filter className="w-4 h-4 text-forest-600" />
+                  </div>
+                  <span className="text-sm font-bold text-forest-800">筛选条件</span>
+                </div>
+                <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="relative" ref={customerDropdownRef}>
+                    <button
+                      onClick={() => setShowCustomerDropdown(!showCustomerDropdown)}
+                      className="w-full px-4 py-2.5 rounded-xl bg-white border border-sand-200 text-left text-sm hover:border-forest-300 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-forest-400/20 focus:border-forest-400 transition-all flex items-center justify-between"
+                    >
+                      <span className={filterCustomer === 'all' ? 'text-gray-400' : 'text-gray-800 font-medium'}>
+                        {filterCustomer === 'all' ? '全部客户' : customers.find(c => c.id === filterCustomer)?.name}
+                      </span>
+                      <ChevronDown className={`w-4 h-4 text-gray-400 transition-transform ${showCustomerDropdown ? 'rotate-180' : ''}`} />
+                    </button>
+                    {showCustomerDropdown && (
+                      <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-xl shadow-xl border border-sand-100 overflow-hidden z-20 max-h-64 overflow-y-auto animate-fade-in">
+                        <div
+                          onClick={() => { setFilterCustomer('all'); setShowCustomerDropdown(false); }}
+                          className={`px-4 py-2.5 cursor-pointer hover:bg-forest-50/50 transition-colors text-sm border-b border-sand-50 ${filterCustomer === 'all' ? 'bg-forest-50/80 text-forest-700 font-bold' : 'text-gray-700'}`}
+                        >
+                          全部客户 <span className="text-xs text-gray-400 ml-2">({orders.length}笔)</span>
+                        </div>
+                        {customers.map(c => {
+                          const cnt = orders.filter(o => o.customerId === c.id).length;
+                          if (cnt === 0) return null;
+                          return (
+                            <div
+                              key={c.id}
+                              onClick={() => { setFilterCustomer(c.id); setShowCustomerDropdown(false); }}
+                              className={`px-4 py-2.5 cursor-pointer hover:bg-forest-50/50 transition-colors text-sm border-b border-sand-50 last:border-b-0 ${filterCustomer === c.id ? 'bg-forest-50/80 text-forest-700 font-bold' : 'text-gray-700'}`}
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="flex items-center gap-2">
+                                  <Building2 className="w-3.5 h-3.5 text-gray-400" />
+                                  {c.name}
+                                </span>
+                                <span className="text-xs text-gray-400">{cnt}笔</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                  <div className="relative">
+                    <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                    <input
+                      type="text"
+                      value={filterProject}
+                      onChange={(e) => setFilterProject(e.target.value)}
+                      placeholder="搜索项目名称..."
+                      className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-white border border-sand-200 text-sm placeholder:text-gray-400 hover:border-forest-300 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-forest-400/20 focus:border-forest-400 transition-all"
+                    />
+                    {filterProject && (
+                      <button onClick={() => setFilterProject('')} className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 rounded-full bg-sand-100 hover:bg-sand-200 flex items-center justify-center transition-colors">
+                        <X className="w-3 h-3 text-gray-500" />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div className="overflow-x-auto -mx-5 -mb-5">
               <table className="w-full">
                 <thead className="bg-gradient-to-r from-sand-50 to-forest-50/30">
@@ -103,7 +212,19 @@ const Sales: React.FC = () => {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-sand-100">
-                  {orders.map((o, idx) => {
+                  {filteredOrders.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="px-5 py-16 text-center">
+                        <div className="inline-flex flex-col items-center gap-3">
+                          <div className="w-16 h-16 rounded-2xl bg-sand-50 flex items-center justify-center border border-sand-100">
+                            <Search className="w-8 h-8 text-gray-300" />
+                          </div>
+                          <div className="text-sm font-medium text-gray-500">没有找到匹配的订单</div>
+                          <div className="text-xs text-gray-400">试试调整筛选条件或清除筛选</div>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : filteredOrders.map((o, idx) => {
                     const cust = customers.find(c => c.id === o.customerId);
                     const totalQty = o.items.reduce((s, i) => s + i.quantity, 0);
                     return (

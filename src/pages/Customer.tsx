@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import {
-  Users, Phone, MapPin, Building2, Calendar, Star, MessageSquare, TrendingUp, Crown, Award, Target, UserPlus
+  Users, Phone, MapPin, Building2, Calendar, Star, MessageSquare, TrendingUp, Crown, Award, Target, UserPlus,
+  X, ChevronRight, FileCheck, Truck, Package, Receipt, CreditCard
 } from 'lucide-react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend
@@ -10,12 +11,14 @@ import StatCard from '@/components/ui/StatCard';
 import Card from '@/components/ui/Card';
 import Tabs from '@/components/ui/Tabs';
 import Badge from '@/components/ui/Badge';
-import { formatCurrency, formatDate, getCustomerLevelColor, maskPhone } from '@/utils/formatters';
+import { formatCurrency, formatDate, getCustomerLevelColor, maskPhone, getStatusColor } from '@/utils/formatters';
+import type { Customer as CustomerType, Order, Outbound, ProjectDelivery } from '@/types';
 
 const Customer: React.FC = () => {
-  const { customers, orders, contactLogs, getOrdersByCustomer } = useStore();
+  const { customers, orders, contactLogs, getOrdersByCustomer, outbounds, projectDeliveries } = useStore();
   const [activeTab, setActiveTab] = useState('profiles');
   const [selectedCustomer, setSelectedCustomer] = useState<string | null>(null);
+  const [detailCustomerId, setDetailCustomerId] = useState<string | null>(null);
 
   const totalCustomers = customers.length;
   const vipCount = customers.filter(c => c.level === 'VIP').length;
@@ -46,7 +49,7 @@ const Customer: React.FC = () => {
     '会议': Users,
   };
 
-  return (
+  const mainContent = (
     <div className="space-y-6">
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={Users} label="客户总数" value={`${totalCustomers}家`} subValue={`VIP客户${vipCount}家`} color="forest" trend={{ value: '+3家', positive: true }} />
@@ -71,10 +74,15 @@ const Customer: React.FC = () => {
             {customers.map((c, idx) => (
               <div
                 key={c.id}
-                onClick={() => setSelectedCustomer(c.id)}
-                className={`rounded-2xl bg-white shadow-card border overflow-hidden hover:shadow-hover hover:-translate-y-0.5 transition-all duration-300 cursor-pointer animate-fade-in-up ${selectedCustomer === c.id ? 'border-forest-400 ring-2 ring-forest-400/20' : 'border-sand-100'}`}
+                onClick={() => { setSelectedCustomer(c.id); setDetailCustomerId(c.id); }}
+                className={`group rounded-2xl bg-white shadow-card border overflow-hidden hover:shadow-hover hover:-translate-y-0.5 transition-all duration-300 cursor-pointer animate-fade-in-up relative ${selectedCustomer === c.id ? 'border-forest-400 ring-2 ring-forest-400/20' : 'border-sand-100'}`}
                 style={{ animationDelay: `${idx * 40}ms` }}
               >
+                <div className="absolute top-2 right-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="px-2.5 py-1 rounded-lg bg-white/90 backdrop-blur text-xs font-bold text-forest-700 shadow-sm border border-forest-100 flex items-center gap-1">
+                    查看详情 <ChevronRight className="w-3 h-3" />
+                  </div>
+                </div>
                 <div className="relative h-24 bg-gradient-to-br from-forest-500 via-forest-600 to-forest-700 overflow-hidden">
                   <div className="absolute inset-0 opacity-10">
                     <div className="absolute -right-4 -top-4 w-24 h-24 rounded-full bg-white" />
@@ -249,6 +257,284 @@ const Customer: React.FC = () => {
       )}
     </div>
   );
+
+  if (detailCustomerId) {
+    const detailCustomer = customers.find(c => c.id === detailCustomerId);
+    if (detailCustomer) {
+      const custOrders = getOrdersByCustomer(detailCustomerId);
+      const custOrderIds = custOrders.map(o => o.id);
+      const custOutbounds = outbounds.filter(ob => custOrderIds.includes(ob.orderId));
+      const custProjects = projectDeliveries.filter(p => p.customerId === detailCustomerId);
+      const totalPaid = custOrders.reduce((s, o) => s + o.paidAmount, 0);
+      const totalOrderAmount = custOrders.reduce((s, o) => s + o.amount, 0);
+      const unpaid = totalOrderAmount - totalPaid;
+      const paidRate = totalOrderAmount > 0 ? (totalPaid / totalOrderAmount) * 100 : 0;
+
+      return (
+        <>
+          {mainContent}
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setDetailCustomerId(null)}>
+            <div className="bg-white rounded-3xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-hidden animate-scale-in" onClick={(e) => e.stopPropagation()}>
+              <div className="relative bg-gradient-to-br from-forest-600 via-forest-500 to-leaf-500 text-white">
+                <div className="absolute inset-0 opacity-10">
+                  <div className="absolute -right-20 -top-20 w-64 h-64 rounded-full bg-white" />
+                  <div className="absolute right-40 bottom-0 w-40 h-40 rounded-full bg-white" />
+                </div>
+                <div className="relative p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-start gap-5">
+                      <div className="w-20 h-20 rounded-2xl bg-white/20 backdrop-blur border-4 border-white/30 flex items-center justify-center shadow-xl">
+                        <Building2 className="w-10 h-10 text-white" />
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-3 mb-2">
+                          <h2 className="font-serif font-bold text-2xl">{detailCustomer.name}</h2>
+                          <Badge variant="custom" customClass={getCustomerLevelColor(detailCustomer.level)}>
+                            <Crown className="w-3 h-3 mr-1" />{detailCustomer.level}
+                          </Badge>
+                          <Badge variant="custom" customClass="bg-white/20 text-white border-white/30 backdrop-blur">{detailCustomer.type}</Badge>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-4 text-sm text-white/90">
+                          <span className="flex items-center gap-1.5"><UserPlus className="w-4 h-4" />{detailCustomer.contact}</span>
+                          <span className="flex items-center gap-1.5"><Phone className="w-4 h-4" />{maskPhone(detailCustomer.phone)}</span>
+                          <span className="flex items-center gap-1.5"><MapPin className="w-4 h-4" />{detailCustomer.address}</span>
+                          <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4" />入驻{formatDate(detailCustomer.registerDate)}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <button onClick={() => setDetailCustomerId(null)} className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-6">
+                    <div className="bg-white/15 backdrop-blur rounded-xl p-4 border border-white/20">
+                      <div className="text-xs text-white/80 mb-1">累计订单</div>
+                      <div className="text-2xl font-bold">{custOrders.length}<span className="text-sm ml-1 text-white/70">笔</span></div>
+                    </div>
+                    <div className="bg-white/15 backdrop-blur rounded-xl p-4 border border-white/20">
+                      <div className="text-xs text-white/80 mb-1">订单总额</div>
+                      <div className="text-2xl font-bold">¥{(totalOrderAmount / 10000).toFixed(1)}<span className="text-sm ml-1 text-white/70">万</span></div>
+                    </div>
+                    <div className="bg-white/15 backdrop-blur rounded-xl p-4 border border-white/20">
+                      <div className="text-xs text-white/80 mb-1">已回款</div>
+                      <div className="text-2xl font-bold text-leaf-200">¥{(totalPaid / 10000).toFixed(1)}<span className="text-sm ml-1 text-white/70">万</span></div>
+                    </div>
+                    <div className="bg-white/15 backdrop-blur rounded-xl p-4 border border-white/20">
+                      <div className="text-xs text-white/80 mb-1">回款进度</div>
+                      <div className="text-2xl font-bold">{paidRate.toFixed(0)}<span className="text-sm ml-1 text-white/70">%</span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="p-6 overflow-y-auto max-h-[calc(90vh-280px)] space-y-6">
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                  <Card title="订单明细" subtitle={`共${custOrders.length}笔订单记录`} icon={<Receipt className="w-5 h-5" />}>
+                    {custOrders.length === 0 ? (
+                      <div className="py-10 text-center text-gray-400 text-sm">暂无订单记录</div>
+                    ) : (
+                      <div className="space-y-3 max-h-72 overflow-y-auto -mr-2 pr-2">
+                        {custOrders.map(o => {
+                          const totalQty = o.items.reduce((s, i) => s + i.quantity, 0);
+                          return (
+                            <div key={o.id} className="p-4 rounded-xl bg-sand-50/50 border border-sand-100 hover:bg-forest-50/30 transition-colors">
+                              <div className="flex items-start justify-between mb-2">
+                                <div>
+                                  <div className="font-mono text-sm font-bold text-forest-700">{o.orderNo}</div>
+                                  {o.projectName && <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-1"><Building2 className="w-3 h-3" />{o.projectName}</div>}
+                                </div>
+                                <Badge variant={o.status === '已完成' || o.status === '已验收' ? 'success' : o.status === '待确认' ? 'warning' : 'info'} className="border text-xs">{o.status}</Badge>
+                              </div>
+                              <div className="flex items-center justify-between text-xs text-gray-500">
+                                <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{formatDate(o.orderDate)}</span>
+                                <span>{totalQty.toLocaleString()}株</span>
+                                <span className="font-bold text-earth-600">{formatCurrency(o.amount)}</span>
+                              </div>
+                              <div className="mt-2 pt-2 border-t border-sand-100">
+                                <div className="flex items-center justify-between text-xs mb-1">
+                                  <span className="text-gray-500 flex items-center gap-1"><CreditCard className="w-3 h-3" />回款进度</span>
+                                  <span className="font-bold text-leaf-600">{formatCurrency(o.paidAmount)} / {formatCurrency(o.amount)}</span>
+                                </div>
+                                <div className="h-2 rounded-full bg-white overflow-hidden border border-sand-100">
+                                  <div className="h-full rounded-full bg-gradient-to-r from-leaf-400 to-forest-500" style={{ width: `${o.amount > 0 ? (o.paidAmount / o.amount) * 100 : 0}%` }} />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </Card>
+
+                  <Card title="出圃检疫" subtitle={`共${custOutbounds.length}份检疫证书`} icon={<FileCheck className="w-5 h-5" />}>
+                    {custOutbounds.length === 0 ? (
+                      <div className="py-10 text-center text-gray-400 text-sm">暂无出圃检疫记录</div>
+                    ) : (
+                      <div className="space-y-3 max-h-72 overflow-y-auto -mr-2 pr-2">
+                        {custOutbounds.map(ob => {
+                          const order = custOrders.find(o => o.id === ob.orderId);
+                          return (
+                            <div key={ob.id} className="p-4 rounded-xl bg-gradient-to-br from-forest-50 to-leaf-400/10 border border-forest-100">
+                              <div className="flex items-start justify-between mb-2">
+                                <div>
+                                  <div className="font-serif font-bold text-forest-800">{ob.certificate}</div>
+                                  <div className="font-mono text-xs text-gray-500 mt-0.5">{ob.inspectionNo}</div>
+                                </div>
+                                <Badge variant={ob.result === '合格' ? 'success' : 'warning'} className="text-xs border">{ob.result}</Badge>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                                <span className="flex items-center gap-1"><Truck className="w-3 h-3 text-forest-500" />出圃：{formatDate(ob.outboundDate)}</span>
+                                <span className="flex items-center gap-1"><Users className="w-3 h-3 text-forest-500" />检验员：{ob.operator}</span>
+                              </div>
+                              {order && <div className="mt-2 pt-2 border-t border-forest-100/50 text-xs text-gray-500 flex items-center gap-1"><Receipt className="w-3 h-3" />关联订单：<span className="font-mono font-medium text-forest-600">{order.orderNo}</span></div>}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </Card>
+                </div>
+
+                <Card title="绿化工程供苗进度" subtitle={`共${custProjects.length}个工程项目`} icon={<Building2 className="w-5 h-5" />}>
+                  {custProjects.length === 0 ? (
+                    <div className="py-10 text-center text-gray-400 text-sm">暂无关联工程项目</div>
+                  ) : (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {custProjects.map(p => (
+                        <div key={p.id} className="p-5 rounded-2xl bg-white border border-sand-100 shadow-soft">
+                          <div className="flex items-start justify-between mb-4">
+                            <div>
+                              <div className="flex items-center gap-2 mb-1">
+                                <h4 className="font-bold text-lg text-forest-800">{p.projectName}</h4>
+                                <Badge variant="custom" customClass={getStatusColor(p.status)} className="text-xs">{p.status}</Badge>
+                              </div>
+                              <div className="flex items-center gap-2 text-xs text-gray-500">
+                                <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{p.location}</span>
+                                <span>·</span>
+                                <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{formatDate(p.startDate)}</span>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className="text-xs text-gray-500">进度</div>
+                              <div className="text-2xl font-bold text-forest-700">{p.progress}%</div>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-3 gap-2 mb-3">
+                            <div className="text-center p-2 rounded-lg bg-sky-50 border border-sky-100">
+                              <div className="text-[10px] text-sky-600">总量</div>
+                              <div className="font-bold text-gray-800 text-sm">{p.totalQuantity.toLocaleString()}</div>
+                            </div>
+                            <div className="text-center p-2 rounded-lg bg-leaf-400/10 border border-leaf-400/20">
+                              <div className="text-[10px] text-leaf-600">已交付</div>
+                              <div className="font-bold text-gray-800 text-sm">{p.deliveredQuantity.toLocaleString()}</div>
+                            </div>
+                            <div className="text-center p-2 rounded-lg bg-amber-50 border border-amber-100">
+                              <div className="text-[10px] text-amber-600">剩余</div>
+                              <div className="font-bold text-gray-800 text-sm">{(p.totalQuantity - p.deliveredQuantity).toLocaleString()}</div>
+                            </div>
+                          </div>
+                          <div className="h-3 rounded-full bg-sand-50 border border-sand-100 overflow-hidden">
+                            <div className={`h-full rounded-full transition-all ${p.progress === 100 ? 'bg-gradient-to-r from-leaf-500 to-forest-500' : 'bg-gradient-to-r from-sky-400 via-forest-400 to-leaf-500'}`} style={{ width: `${p.progress}%` }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </Card>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <Card title="开票与回款概览" icon={<CreditCard className="w-5 h-5" />}>
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="p-4 rounded-xl bg-gradient-to-br from-leaf-400/10 to-forest-50 border border-leaf-400/20">
+                          <div className="text-xs text-leaf-700 font-medium mb-1">已回款金额</div>
+                          <div className="text-2xl font-bold text-forest-700">{formatCurrency(totalPaid)}</div>
+                        </div>
+                        <div className={`p-4 rounded-xl border ${unpaid > 0 ? 'bg-gradient-to-br from-amber-50 to-orange-50 border-amber-100' : 'bg-gradient-to-br from-gray-50 to-sand-50 border-gray-100'}`}>
+                          <div className={`text-xs font-medium mb-1 ${unpaid > 0 ? 'text-amber-700' : 'text-gray-500'}`}>待回款金额</div>
+                          <div className={`text-2xl font-bold ${unpaid > 0 ? 'text-amber-700' : 'text-gray-500'}`}>{formatCurrency(unpaid)}</div>
+                        </div>
+                      </div>
+                      <div className="p-4 rounded-xl bg-sand-50 border border-sand-100">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium text-gray-700">整体回款率</span>
+                          <span className="text-sm font-bold text-forest-700">{paidRate.toFixed(1)}%</span>
+                        </div>
+                        <div className="h-4 rounded-full bg-white border border-sand-200 overflow-hidden">
+                          <div className="h-full rounded-full bg-gradient-to-r from-leaf-400 to-forest-500 transition-all duration-1000" style={{ width: `${paidRate}%` }} />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        {custOrders.filter(o => o.paidAmount < o.amount).length > 0 && (
+                          <div className="p-3 rounded-lg bg-amber-50/50 border border-amber-100">
+                            <div className="text-xs font-bold text-amber-700 mb-1">📋 待回款订单</div>
+                            <div className="space-y-1">
+                              {custOrders.filter(o => o.paidAmount < o.amount).map(o => (
+                                <div key={o.id} className="flex items-center justify-between text-xs text-gray-600">
+                                  <span className="font-mono">{o.orderNo}</span>
+                                  <span className="font-medium text-amber-700">{formatCurrency(o.amount - o.paidAmount)}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+
+                  <Card title="订单苗木品种统计" icon={<Package className="w-5 h-5" />}>
+                    {(() => {
+                      const speciesMap: Record<string, { name: string; quantity: number; amount: number }> = {};
+                      custOrders.forEach(o => {
+                        o.items.forEach(item => {
+                          if (!speciesMap[item.speciesId]) {
+                            speciesMap[item.speciesId] = { name: item.speciesName, quantity: 0, amount: 0 };
+                          }
+                          speciesMap[item.speciesId].quantity += item.quantity;
+                          speciesMap[item.speciesId].amount += item.quantity * item.unitPrice;
+                        });
+                      });
+                      const speciesList = Object.values(speciesMap).sort((a, b) => b.quantity - a.quantity);
+                      const maxQty = Math.max(...speciesList.map(s => s.quantity), 1);
+                      return speciesList.length === 0 ? (
+                        <div className="py-10 text-center text-gray-400 text-sm">暂无苗木数据</div>
+                      ) : (
+                        <div className="space-y-3">
+                          {speciesList.map(s => (
+                            <div key={s.name} className="p-3 rounded-xl bg-sand-50/50 border border-sand-100">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="font-bold text-gray-800">{s.name}</span>
+                                <span className="text-xs text-gray-500">{s.quantity.toLocaleString()}株 · {formatCurrency(s.amount)}</span>
+                              </div>
+                              <div className="h-2 rounded-full bg-white overflow-hidden border border-sand-100">
+                                <div className="h-full rounded-full bg-gradient-to-r from-forest-400 via-leaf-400 to-leaf-500" style={{ width: `${(s.quantity / maxQty) * 100}%` }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </Card>
+                </div>
+              </div>
+
+              <div className="p-4 bg-sand-50 border-t border-sand-100 flex items-center justify-between">
+                <div className="text-xs text-gray-500 flex items-center gap-2">
+                  <Award className="w-4 h-4 text-amber-500" />
+                  <span>累计合作 {detailCustomer.totalOrders} 笔订单，交易额 {formatCurrency(detailCustomer.totalAmount)}</span>
+                </div>
+                <button onClick={() => setDetailCustomerId(null)} className="px-5 py-2 rounded-xl bg-gradient-to-r from-forest-600 to-leaf-500 text-white font-medium text-sm hover:shadow-lg hover:-translate-y-0.5 transition-all flex items-center gap-2">
+                  关闭 <ChevronRight className="w-4 h-4 rotate-90" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </>
+      );
+    }
+  }
+
+  return mainContent;
 };
 
 export default Customer;

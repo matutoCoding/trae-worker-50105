@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import {
-  Bug, AlertTriangle, Shield, Calendar, Clock, Users, ChevronLeft, ChevronRight, Pill, Droplets, Scissors as _Scissors, Search as _Search, CheckCircle
+  Bug, AlertTriangle, Shield, Calendar, Clock, Users, ChevronLeft, ChevronRight, Pill, Droplets, Scissors as _Scissors, Search as _Search, CheckCircle, Filter, ListTodo, CheckCheck, X, MapPin as _MapPin
 } from 'lucide-react';
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend
@@ -11,11 +11,15 @@ import Card from '@/components/ui/Card';
 import Tabs from '@/components/ui/Tabs';
 import Badge from '@/components/ui/Badge';
 import { formatDate, getStatusColor } from '@/utils/formatters';
+import type { ScheduleItem } from '@/types';
 
 const PestControl: React.FC = () => {
   const { pestInfos, pestTreatments, schedules } = useStore();
   const [activeTab, setActiveTab] = useState('pedia');
   const [currentMonth, setCurrentMonth] = useState(new Date(2024, 5, 1));
+  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date(2024, 5, 17));
+  const [scheduleFilter, setScheduleFilter] = useState<'all' | 'pending' | 'done'>('all');
+  const [showDayModal, setShowDayModal] = useState(false);
 
   const totalTreatments = pestTreatments.length;
   const completedTreatments = pestTreatments.filter(t => t.status === '已完成').length;
@@ -165,112 +169,201 @@ const PestControl: React.FC = () => {
       )}
 
       {activeTab === 'schedule' && (
-        <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
-          <Card
-            className="xl:col-span-2"
-            title={`${currentMonth.getFullYear()}年${monthNames[currentMonth.getMonth()]}`}
-            subtitle="防治排期日历 · 点击日期查看详情"
-            icon={<Calendar className="w-5 h-5" />}
-            extra={
-              <div className="flex items-center gap-2">
-                <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))} className="p-2 rounded-lg hover:bg-sand-100 transition-colors"><ChevronLeft className="w-4 h-4 text-gray-600" /></button>
-                <button onClick={() => setCurrentMonth(new Date())} className="px-3 py-1.5 rounded-lg text-sm font-medium bg-forest-50 text-forest-700 hover:bg-forest-100 transition-colors">今天</button>
-                <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))} className="p-2 rounded-lg hover:bg-sand-100 transition-colors"><ChevronRight className="w-4 h-4 text-gray-600" /></button>
-              </div>
-            }
-          >
-            <div className="grid grid-cols-7 gap-1 mb-2">
-              {['日', '一', '二', '三', '四', '五', '六'].map(d => (
-                <div key={d} className="text-center text-xs font-bold text-gray-500 py-2">{d}</div>
-              ))}
-            </div>
-            <div className="grid grid-cols-7 gap-1">
-              {calendarDays.map(({ date, events }, idx) => {
-                const isToday = date.toDateString() === new Date(2024, 5, 17).toDateString();
-                const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
-                return (
-                  <div
-                    key={idx}
-                    className={`min-h-[80px] p-2 rounded-xl border transition-all duration-200 ${
-                      isCurrentMonth ? 'bg-white border-sand-100 hover:border-forest-300 hover:bg-forest-50/30' : 'bg-sand-50/50 border-transparent opacity-50'
-                    } ${isToday ? 'ring-2 ring-forest-500 ring-offset-2 bg-gradient-to-br from-forest-50 to-leaf-400/10' : ''}`}
-                  >
-                    <div className={`text-xs font-bold mb-1 ${isToday ? 'text-forest-700' : isCurrentMonth ? 'text-gray-700' : 'text-gray-400'}`}>{date.getDate()}</div>
-                    <div className="space-y-1">
-                      {events.slice(0, 2).map(evt => {
-                        const Icon = scheduleTypeIcons[evt.type];
-                        return (
-                          <div
-                            key={evt.id}
-                            className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium truncate border ${scheduleTypeColors[evt.type]} ${evt.status === '已完成' ? 'opacity-60 line-through' : ''}`}
-                          >
-                            {Icon && <Icon className="w-2.5 h-2.5" />}
-                            <span className="truncate">{evt.title.slice(0, 6)}</span>
-                          </div>
-                        );
-                      })}
-                      {events.length > 2 && <div className="text-[10px] text-gray-400">+{events.length - 2}项</div>}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="flex flex-wrap items-center gap-4 mt-4 pt-4 border-t border-sand-100">
-              {Object.entries(scheduleTypeColors).map(([type, cls]) => (
-                <div key={type} className="flex items-center gap-2">
-                  <div className={`w-3 h-3 rounded border ${cls}`} />
-                  <span className="text-xs text-gray-600">{type}</span>
+        <div className="space-y-5">
+          <div className="grid grid-cols-1 xl:grid-cols-3 gap-5">
+            <Card
+              className="xl:col-span-2"
+              title={`${currentMonth.getFullYear()}年${monthNames[currentMonth.getMonth()]}`}
+              subtitle="防治排期日历 · 点击日期查看当天全部安排"
+              icon={<Calendar className="w-5 h-5" />}
+              extra={
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))} className="p-2 rounded-lg hover:bg-sand-100 transition-colors"><ChevronLeft className="w-4 h-4 text-gray-600" /></button>
+                  <button onClick={() => { setCurrentMonth(new Date(2024, 5, 1)); setSelectedDate(new Date(2024, 5, 17)); }} className="px-3 py-1.5 rounded-lg text-sm font-medium bg-forest-50 text-forest-700 hover:bg-forest-100 transition-colors">今天</button>
+                  <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))} className="p-2 rounded-lg hover:bg-sand-100 transition-colors"><ChevronRight className="w-4 h-4 text-gray-600" /></button>
                 </div>
-              ))}
-              <div className="flex items-center gap-2 ml-auto">
-                <div className="w-3 h-3 rounded-full bg-amber-400 animate-pulse" />
-                <span className="text-xs text-gray-600">待办</span>
-                <CheckCircle className="w-3.5 h-3.5 text-forest-500" />
-                <span className="text-xs text-gray-600">已完成</span>
+              }
+            >
+              <div className="grid grid-cols-7 gap-1 mb-2">
+                {['日', '一', '二', '三', '四', '五', '六'].map(d => (
+                  <div key={d} className="text-center text-xs font-bold text-gray-500 py-2">{d}</div>
+                ))}
               </div>
-            </div>
-          </Card>
-
-          <div className="space-y-5">
-            <Card title="近期待办任务" subtitle="按日期排序的近期任务" icon={<AlertTriangle className="w-5 h-5" />}>
-              <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
-                {schedules.filter(s => s.status === '待办').slice(0, 8).map((s, idx) => {
-                  const Icon = scheduleTypeIcons[s.type];
+              <div className="grid grid-cols-7 gap-1">
+                {calendarDays.map(({ date, events }, idx) => {
+                  const isToday = date.toDateString() === new Date(2024, 5, 17).toDateString();
+                  const isSelected = selectedDate && date.toDateString() === selectedDate.toDateString();
+                  const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
+                  const filteredEvts = events.filter(e => {
+                    if (scheduleFilter === 'all') return true;
+                    if (scheduleFilter === 'pending') return e.status === '待办';
+                    return e.status === '已完成';
+                  });
+                  const pendingCount = events.filter(e => e.status === '待办').length;
                   return (
-                    <div key={s.id} className="flex items-start gap-3 p-3 rounded-xl hover:bg-sand-50 transition-colors group animate-fade-in" style={{ animationDelay: `${idx * 30}ms` }}>
-                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${scheduleTypeColors[s.type]}`}>
-                        {Icon && <Icon className="w-5 h-5" />}
+                    <button
+                      key={idx}
+                      onClick={() => { setSelectedDate(date); setShowDayModal(true); }}
+                      className={`min-h-[88px] p-1.5 rounded-xl border text-left transition-all duration-200 group ${
+                        isCurrentMonth ? 'bg-white border-sand-100 hover:border-forest-400 hover:bg-forest-50/50 hover:shadow-soft' : 'bg-sand-50/50 border-transparent opacity-50 cursor-not-allowed'
+                      } ${isToday ? 'ring-2 ring-forest-500 ring-offset-1 bg-gradient-to-br from-forest-50 to-leaf-400/10' : ''} ${
+                        isSelected && !isToday ? 'ring-2 ring-leaf-400 ring-offset-1 bg-leaf-400/10 border-leaf-300' : ''
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-1">
+                        <span className={`text-xs font-bold ${isToday ? 'text-forest-700' : isCurrentMonth ? 'text-gray-700 group-hover:text-forest-700' : 'text-gray-400'}`}>{date.getDate()}</span>
+                        {pendingCount > 0 && isCurrentMonth && (
+                          <span className="w-4 h-4 rounded-full bg-amber-400 text-white text-[10px] font-bold flex items-center justify-center animate-pulse-slow">
+                            {pendingCount}
+                          </span>
+                        )}
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-0.5">
-                          <span className="text-sm font-bold text-gray-800">{s.title}</span>
-                          {s.batchNo && <span className="text-[10px] bg-sand-100 text-gray-500 px-1.5 py-0.5 rounded font-mono">{s.batchNo}</span>}
-                        </div>
-                        <div className="flex items-center gap-2 text-xs text-gray-500">
-                          <Calendar className="w-3 h-3" />{formatDate(s.date)}
-                          <Clock className="w-3 h-3 ml-2" />{s.type}
-                        </div>
+                      <div className="space-y-1">
+                        {filteredEvts.slice(0, 2).map(evt => {
+                          const Icon = scheduleTypeIcons[evt.type];
+                          return (
+                            <div
+                              key={evt.id}
+                              className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium truncate border ${scheduleTypeColors[evt.type]} ${evt.status === '已完成' ? 'opacity-50 line-through' : ''}`}
+                            >
+                              {Icon && <Icon className="w-2.5 h-2.5 flex-shrink-0" />}
+                              <span className="truncate">{evt.title.slice(0, 7)}</span>
+                            </div>
+                          );
+                        })}
+                        {filteredEvts.length > 2 && <div className="text-[10px] text-gray-400 font-medium">+{filteredEvts.length - 2}项安排</div>}
+                        {filteredEvts.length === 0 && events.length > 0 && scheduleFilter !== 'all' && (
+                          <div className="text-[10px] text-gray-300 italic">无符合项</div>
+                        )}
                       </div>
-                    </div>
+                    </button>
                   );
                 })}
               </div>
-            </Card>
 
-            <Card title="严重程度分布" subtitle="病虫害严重度占比" icon={<PieChart className="w-5 h-5" />}>
-              <div className="h-48">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie data={severityDistribution} cx="50%" cy="50%" innerRadius={35} outerRadius={60} dataKey="value" label={({ name, value }) => `${name}${value}`}>
-                      {severityDistribution.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
+              <div className="flex flex-wrap items-center justify-between gap-4 mt-4 pt-4 border-t border-sand-100">
+                <div className="flex flex-wrap items-center gap-3">
+                  {Object.entries(scheduleTypeColors).map(([type, cls]) => (
+                    <div key={type} className="flex items-center gap-2">
+                      <div className={`w-3 h-3 rounded border ${cls}`} />
+                      <span className="text-xs text-gray-600">{type}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center gap-2 p-1 rounded-xl bg-sand-50 border border-sand-100">
+                  {[
+                    { k: 'all', label: '全部', icon: Filter },
+                    { k: 'pending', label: '待办', icon: ListTodo },
+                    { k: 'done', label: '已完成', icon: CheckCheck },
+                  ].map(f => {
+                    const Icon = f.icon;
+                    return (
+                      <button
+                        key={f.k}
+                        onClick={() => setScheduleFilter(f.k as any)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                          scheduleFilter === f.k
+                            ? 'bg-white text-forest-700 shadow-sm border border-forest-100'
+                            : 'text-gray-500 hover:text-gray-700 hover:bg-white/50'
+                        }`}
+                      >
+                        <Icon className="w-3.5 h-3.5" />
+                        {f.label}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </Card>
+
+            <div className="space-y-5">
+              <Card
+                title={selectedDate ? `${formatDate(selectedDate.toISOString().slice(0,10))} · 日程安排` : '近期待办任务'}
+                subtitle={selectedDate ? `点击日历中的日期切换` : '按日期排序的近期任务'}
+                icon={<ListTodo className="w-5 h-5" />}
+                extra={selectedDate ? (
+                  <button onClick={() => setShowDayModal(true)} className="text-xs font-medium text-forest-600 hover:text-forest-800 flex items-center gap-1">
+                    查看全部 <ChevronRight className="w-3 h-3" />
+                  </button>
+                ) : null}
+              >
+                <div className="space-y-3 max-h-[340px] overflow-y-auto pr-1">
+                  {(() => {
+                    let list: ScheduleItem[] = [];
+                    if (selectedDate) {
+                      const ds = selectedDate.toISOString().slice(0, 10);
+                      list = schedules.filter(s => s.date === ds);
+                      if (scheduleFilter !== 'all') {
+                        list = list.filter(s => scheduleFilter === 'pending' ? s.status === '待办' : s.status === '已完成');
+                      }
+                    } else {
+                      list = schedules
+                        .filter(s => scheduleFilter === 'all' ? true : scheduleFilter === 'pending' ? s.status === '待办' : s.status === '已完成')
+                        .sort((a, b) => a.date.localeCompare(b.date))
+                        .slice(0, 10);
+                    }
+                    if (list.length === 0) {
+                      return (
+                        <div className="py-10 text-center">
+                          <CheckCircle className="w-10 h-10 text-forest-300 mx-auto mb-2" />
+                          <div className="text-sm text-gray-400">暂无{scheduleFilter === 'pending' ? '待办' : scheduleFilter === 'done' ? '已完成' : ''}日程</div>
+                        </div>
+                      );
+                    }
+                    return list.map((s, idx) => {
+                      const Icon = scheduleTypeIcons[s.type];
+                      return (
+                        <div key={s.id} className="flex items-start gap-3 p-3 rounded-xl hover:bg-sand-50 transition-colors group animate-fade-in border border-transparent hover:border-sand-100" style={{ animationDelay: `${idx * 30}ms` }}>
+                          <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${scheduleTypeColors[s.type]}`}>
+                            {Icon && <Icon className="w-5 h-5" />}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className={`text-sm font-bold ${s.status === '已完成' ? 'text-gray-400 line-through' : 'text-gray-800'}`}>{s.title}</span>
+                              {s.batchNo && <span className="text-[10px] bg-sand-100 text-gray-500 px-1.5 py-0.5 rounded font-mono flex-shrink-0">{s.batchNo}</span>}
+                            </div>
+                            <div className="flex items-center gap-2 text-xs text-gray-500">
+                              <Calendar className="w-3 h-3" />{formatDate(s.date)}
+                              <span className="mx-1 text-gray-300">·</span>
+                              <Clock className="w-3 h-3" />{s.type}
+                            </div>
+                          </div>
+                          <Badge variant="custom" customClass={s.status === '待办' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-forest-50 text-forest-700 border border-forest-200'}>
+                            {s.status === '待办' ? <ListTodo className="w-3 h-3 mr-0.5 inline" /> : <CheckCircle className="w-3 h-3 mr-0.5 inline" />}
+                            {s.status}
+                          </Badge>
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+              </Card>
+
+              <Card title="严重程度分布" subtitle="病虫害严重度占比" icon={<PieChart className="w-5 h-5" />}>
+                <div className="h-48">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={severityDistribution} cx="50%" cy="50%" innerRadius={35} outerRadius={60} dataKey="value" label={({ name, value }) => `${name}${value}`}>
+                        {severityDistribution.map((_, i) => <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />)}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </Card>
+            </div>
           </div>
+
+          {showDayModal && selectedDate && (
+            <DayDetailModal
+              date={selectedDate}
+              events={schedules.filter(s => s.date === selectedDate.toISOString().slice(0, 10))}
+              onClose={() => setShowDayModal(false)}
+              typeColors={scheduleTypeColors}
+              typeIcons={scheduleTypeIcons}
+              filter={scheduleFilter}
+            />
+          )}
         </div>
       )}
 
@@ -357,6 +450,125 @@ const PestControl: React.FC = () => {
           </Card>
         </div>
       )}
+    </div>
+  );
+};
+
+interface DayDetailModalProps {
+  date: Date;
+  events: ScheduleItem[];
+  onClose: () => void;
+  typeColors: Record<string, string>;
+  typeIcons: Record<string, React.ElementType>;
+  filter: 'all' | 'pending' | 'done';
+}
+
+const DayDetailModal: React.FC<DayDetailModalProps> = ({ date, events, onClose, typeColors, typeIcons, filter }) => {
+  const [localFilter, setLocalFilter] = useState(filter);
+  const filtered = events.filter(e => {
+    if (localFilter === 'all') return true;
+    return localFilter === 'pending' ? e.status === '待办' : e.status === '已完成';
+  });
+  const pending = events.filter(e => e.status === '待办').length;
+  const done = events.filter(e => e.status === '已完成').length;
+  const weekdayNames = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in" onClick={onClose}>
+      <div
+        className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden animate-scale-in"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="relative p-6 bg-gradient-to-br from-forest-600 via-forest-700 to-forest-800 text-white overflow-hidden">
+          <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-leaf-400/20" />
+          <div className="absolute -left-8 bottom-0 w-32 h-32 rounded-full bg-sky-400/10" />
+          <div className="relative flex items-start justify-between">
+            <div>
+              <div className="text-xs text-forest-100/80 mb-1">日程详情 · {weekdayNames[date.getDay()]}</div>
+              <h3 className="font-serif text-3xl font-bold">{date.getFullYear()}年{date.getMonth() + 1}月{date.getDate()}日</h3>
+              <div className="flex items-center gap-4 mt-2 text-sm text-forest-100/90">
+                <span className="flex items-center gap-1"><ListTodo className="w-4 h-4" />待办 {pending}项</span>
+                <span className="flex items-center gap-1"><CheckCircle className="w-4 h-4" />已完成 {done}项</span>
+                <span className="flex items-center gap-1"><Calendar className="w-4 h-4" />总计 {events.length}项</span>
+              </div>
+            </div>
+            <button onClick={onClose} className="w-10 h-10 rounded-xl bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div className="relative mt-5 flex gap-1 p-1 rounded-2xl bg-white/10 backdrop-blur border border-white/20 w-fit">
+            {[
+              { k: 'all', label: '全部安排' },
+              { k: 'pending', label: '仅看待办' },
+              { k: 'done', label: '仅看已完成' },
+            ].map(f => (
+              <button
+                key={f.k}
+                onClick={() => setLocalFilter(f.k as any)}
+                className={`px-4 py-1.5 rounded-xl text-sm font-medium transition-all ${
+                  localFilter === f.k ? 'bg-white text-forest-800 shadow-md' : 'text-forest-100/90 hover:text-white hover:bg-white/10'
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="p-6 max-h-[55vh] overflow-y-auto">
+          {filtered.length === 0 ? (
+            <div className="py-16 text-center">
+              <CheckCircle className="w-16 h-16 text-forest-200 mx-auto mb-3" />
+              <h4 className="font-serif text-xl font-bold text-gray-800 mb-1">本日暂无{localFilter === 'pending' ? '待办' : localFilter === 'done' ? '已完成' : ''}安排</h4>
+              <p className="text-sm text-gray-500">
+                {localFilter === 'all' ? '这一天没有排期，可以好好休息一下' : '切换筛选条件查看其他安排'}
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filtered.map((evt, idx) => {
+                const Icon = typeIcons[evt.type];
+                return (
+                  <div
+                    key={evt.id}
+                    className="flex items-start gap-4 p-4 rounded-2xl border border-sand-100 bg-gradient-to-br from-white to-sand-50/50 hover:shadow-soft hover:border-forest-100 transition-all animate-fade-in-up"
+                    style={{ animationDelay: `${idx * 40}ms` }}
+                  >
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0 shadow-sm ${typeColors[evt.type]}`}>
+                      {Icon && <Icon className="w-6 h-6" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <Badge variant="custom" customClass={typeColors[evt.type]}>{evt.type}</Badge>
+                        {evt.batchNo && <span className="text-[10px] font-mono bg-sand-100 text-gray-500 px-2 py-0.5 rounded">{evt.batchNo}</span>}
+                        <Badge variant="custom" customClass={evt.status === '待办' ? 'bg-amber-50 text-amber-700 border border-amber-200' : 'bg-forest-50 text-forest-700 border border-forest-200'}>
+                          {evt.status === '待办' ? <ListTodo className="w-3 h-3 mr-0.5 inline" /> : <CheckCircle className="w-3 h-3 mr-0.5 inline" />}
+                          {evt.status}
+                        </Badge>
+                      </div>
+                      <h5 className={`font-bold text-lg ${evt.status === '已完成' ? 'text-gray-400 line-through' : 'text-gray-800'}`}>{evt.title}</h5>
+                      <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-500">
+                        <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5 text-sky-500" />建议时段：上午 {['喷药', '检查'].includes(evt.type) ? '8:00-10:00' : '浇水'.includes(evt.type) ? '9:00-11:00' : '10:00-12:00'}</span>
+                        {evt.type === '喷药' && <span className="flex items-center gap-1"><AlertTriangle className="w-3.5 h-3.5 text-amber-500" />安全间隔：7天</span>}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        <div className="px-6 py-4 bg-sand-50 border-t border-sand-100 flex items-center justify-between">
+          <div className="text-xs text-gray-500">
+            提示：点击日历中任意日期可查看对应日程
+          </div>
+          <button onClick={onClose} className="px-5 py-2 rounded-xl bg-gradient-to-r from-forest-500 to-leaf-500 text-white font-medium hover:shadow-lg hover:scale-[1.02] active:scale-100 transition-all">
+            关闭
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

@@ -175,11 +175,11 @@ export const outboundList: Outbound[] = [
 ];
 
 export const projectDeliveryList: ProjectDelivery[] = [
-  { id: 'pd1', projectName: '上海迪士尼扩建区景观绿化', customer: '上海迪士尼度假区绿化部', location: '上海市浦东新区', startDate: '2024-06-10', endDate: '2024-07-20', totalQuantity: 160, deliveredQuantity: 65, progress: 40, status: '供苗中' },
-  { id: 'pd2', projectName: '恒大御景半岛三期景观', customer: '恒大地产集团绿化部', location: '广州市天河区', startDate: '2024-06-08', endDate: '2024-06-25', totalQuantity: 370, deliveredQuantity: 370, progress: 100, status: '已完成' },
-  { id: 'pd3', projectName: '苏州古城保护景观提升', customer: '苏州园林发展股份有限公司', location: '苏州市姑苏区', startDate: '2024-06-05', endDate: '2024-06-12', totalQuantity: 535, deliveredQuantity: 535, progress: 100, status: '已完成' },
-  { id: 'pd4', projectName: '朝阳公园扩建工程', customer: '绿源市政园林工程有限公司', location: '北京市朝阳区', startDate: '2024-06-12', endDate: '2024-07-15', totalQuantity: 880, deliveredQuantity: 120, progress: 14, status: '供苗中' },
-  { id: 'pd5', projectName: '杭州西溪湿地景观带', customer: '绿城景观设计工程公司', location: '杭州市西湖区', startDate: '2024-06-15', endDate: '2024-07-10', totalQuantity: 192, deliveredQuantity: 0, progress: 0, status: '待供苗' },
+  { id: 'pd1', customerId: 'c7', projectName: '上海迪士尼扩建区景观绿化', customer: '上海迪士尼度假区绿化部', location: '上海市浦东新区', startDate: '2024-06-10', endDate: '2024-07-20', totalQuantity: 160, deliveredQuantity: 65, progress: 40, status: '供苗中' },
+  { id: 'pd2', customerId: 'c2', projectName: '恒大御景半岛三期景观', customer: '恒大地产集团绿化部', location: '广州市天河区', startDate: '2024-06-08', endDate: '2024-06-25', totalQuantity: 370, deliveredQuantity: 370, progress: 100, status: '已完成' },
+  { id: 'pd3', customerId: 'c4', projectName: '苏州古城保护景观提升', customer: '苏州园林发展股份有限公司', location: '苏州市姑苏区', startDate: '2024-06-05', endDate: '2024-06-12', totalQuantity: 535, deliveredQuantity: 535, progress: 100, status: '已完成' },
+  { id: 'pd4', customerId: 'c1', projectName: '朝阳公园扩建工程', customer: '绿源市政园林工程有限公司', location: '北京市朝阳区', startDate: '2024-06-12', endDate: '2024-07-15', totalQuantity: 880, deliveredQuantity: 120, progress: 14, status: '供苗中' },
+  { id: 'pd5', customerId: 'c3', projectName: '杭州西溪湿地景观带', customer: '绿城景观设计工程公司', location: '杭州市西湖区', startDate: '2024-06-15', endDate: '2024-07-10', totalQuantity: 192, deliveredQuantity: 0, progress: 0, status: '待供苗' },
 ];
 
 export const contactLogList: ContactLog[] = [

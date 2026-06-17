@@ -131,6 +131,7 @@ export interface Outbound {
 export interface ProjectDelivery {
   id: string;
   projectName: string;
+  customerId: string;
   customer: string;
   location: string;
   startDate: string;
