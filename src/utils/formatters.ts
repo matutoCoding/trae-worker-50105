@@ -10,6 +10,10 @@ export const formatDate = (dateStr: string): string => {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 };
 
+export const toLocalDateStr = (date: Date): string => {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+};
+
 export const formatPercent = (value: number, total: number): string => {
   if (total === 0) return '0%';
   return `${((value / total) * 100).toFixed(1)}%`;

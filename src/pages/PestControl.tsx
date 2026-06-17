@@ -10,14 +10,17 @@ import StatCard from '@/components/ui/StatCard';
 import Card from '@/components/ui/Card';
 import Tabs from '@/components/ui/Tabs';
 import Badge from '@/components/ui/Badge';
-import { formatDate, getStatusColor } from '@/utils/formatters';
+import { formatDate, getStatusColor, toLocalDateStr } from '@/utils/formatters';
 import type { ScheduleItem } from '@/types';
+
+const TODAY = new Date(2024, 5, 17);
+const TODAY_STR = toLocalDateStr(TODAY);
 
 const PestControl: React.FC = () => {
   const { pestInfos, pestTreatments, schedules } = useStore();
   const [activeTab, setActiveTab] = useState('pedia');
-  const [currentMonth, setCurrentMonth] = useState(new Date(2024, 5, 1));
-  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date(2024, 5, 17));
+  const [currentMonth, setCurrentMonth] = useState(new Date(TODAY.getFullYear(), TODAY.getMonth(), 1));
+  const [selectedDate, setSelectedDate] = useState<Date | null>(new Date(TODAY));
   const [scheduleFilter, setScheduleFilter] = useState<'all' | 'pending' | 'done'>('all');
   const [showDayModal, setShowDayModal] = useState(false);
 
@@ -87,7 +90,7 @@ const PestControl: React.FC = () => {
 
     for (let i = 1; i <= lastDay.getDate(); i++) {
       const d = new Date(year, month, i);
-      const dateStr = d.toISOString().slice(0, 10);
+      const dateStr = toLocalDateStr(d);
       const evts = schedules.filter(s => s.date === dateStr);
       days.push({ date: d, events: evts });
     }
@@ -179,7 +182,11 @@ const PestControl: React.FC = () => {
               extra={
                 <div className="flex items-center gap-2">
                   <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() - 1, 1))} className="p-2 rounded-lg hover:bg-sand-100 transition-colors"><ChevronLeft className="w-4 h-4 text-gray-600" /></button>
-                  <button onClick={() => { setCurrentMonth(new Date(2024, 5, 1)); setSelectedDate(new Date(2024, 5, 17)); }} className="px-3 py-1.5 rounded-lg text-sm font-medium bg-forest-50 text-forest-700 hover:bg-forest-100 transition-colors">今天</button>
+                  <button onClick={() => {
+                    const newToday = new Date(TODAY);
+                    setCurrentMonth(new Date(newToday.getFullYear(), newToday.getMonth(), 1));
+                    setSelectedDate(newToday);
+                  }} className="px-3 py-1.5 rounded-lg text-sm font-medium bg-forest-50 text-forest-700 hover:bg-forest-100 transition-colors">今天</button>
                   <button onClick={() => setCurrentMonth(new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 1))} className="p-2 rounded-lg hover:bg-sand-100 transition-colors"><ChevronRight className="w-4 h-4 text-gray-600" /></button>
                 </div>
               }
@@ -191,8 +198,8 @@ const PestControl: React.FC = () => {
               </div>
               <div className="grid grid-cols-7 gap-1">
                 {calendarDays.map(({ date, events }, idx) => {
-                  const isToday = date.toDateString() === new Date(2024, 5, 17).toDateString();
-                  const isSelected = selectedDate && date.toDateString() === selectedDate.toDateString();
+                  const isToday = toLocalDateStr(date) === TODAY_STR;
+                  const isSelected = selectedDate && toLocalDateStr(date) === toLocalDateStr(selectedDate);
                   const isCurrentMonth = date.getMonth() === currentMonth.getMonth();
                   const filteredEvts = events.filter(e => {
                     if (scheduleFilter === 'all') return true;
@@ -278,7 +285,7 @@ const PestControl: React.FC = () => {
 
             <div className="space-y-5">
               <Card
-                title={selectedDate ? `${formatDate(selectedDate.toISOString().slice(0,10))} · 日程安排` : '近期待办任务'}
+                title={selectedDate ? `${formatDate(toLocalDateStr(selectedDate))} · 日程安排` : '近期待办任务'}
                 subtitle={selectedDate ? `点击日历中的日期切换` : '按日期排序的近期任务'}
                 icon={<ListTodo className="w-5 h-5" />}
                 extra={selectedDate ? (
@@ -291,7 +298,7 @@ const PestControl: React.FC = () => {
                   {(() => {
                     let list: ScheduleItem[] = [];
                     if (selectedDate) {
-                      const ds = selectedDate.toISOString().slice(0, 10);
+                      const ds = toLocalDateStr(selectedDate);
                       list = schedules.filter(s => s.date === ds);
                       if (scheduleFilter !== 'all') {
                         list = list.filter(s => scheduleFilter === 'pending' ? s.status === '待办' : s.status === '已完成');
@@ -357,7 +364,7 @@ const PestControl: React.FC = () => {
           {showDayModal && selectedDate && (
             <DayDetailModal
               date={selectedDate}
-              events={schedules.filter(s => s.date === selectedDate.toISOString().slice(0, 10))}
+              events={schedules.filter(s => s.date === toLocalDateStr(selectedDate))}
               onClose={() => setShowDayModal(false)}
               typeColors={scheduleTypeColors}
               typeIcons={scheduleTypeIcons}
